@@ -57,7 +57,7 @@ The system follows the **Database-per-Service** pattern, ensuring each microserv
 │   └── prisma/             # Schema for transaction-db
 └── docker-compose.yml      # Full-stack orchestration
 
-
+```
 
 ```
 user_db                          note_db
