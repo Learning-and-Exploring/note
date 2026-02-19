@@ -1,0 +1,182 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Networks
+# ─────────────────────────────────────────────────────────────────────────────
+networks:
+  notion-net:
+    driver: bridge
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Volumes
+# ─────────────────────────────────────────────────────────────────────────────
+volumes:
+  user-db-data:
+  note-db-data:
+  kafka-data:
+  zookeeper-data:
+  zookeeper-log:
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Services
+# ─────────────────────────────────────────────────────────────────────────────
+services:
+
+  # ── Zookeeper ──────────────────────────────────────────────────────────────
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    container_name: zookeeper
+    restart: unless-stopped
+    networks:
+      - notion-net
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-log:/var/lib/zookeeper/log
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo ruok | nc localhost 2181 | grep imok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Kafka ──────────────────────────────────────────────────────────────────
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: kafka
+    restart: unless-stopped
+    networks:
+      - notion-net
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  # ── PostgreSQL – User DB ───────────────────────────────────────────────────
+  user-db:
+    image: postgres:16-alpine
+    container_name: user-db
+    restart: unless-stopped
+    networks:
+      - notion-net
+    environment:
+      POSTGRES_USER: user_admin
+      POSTGRES_PASSWORD: user_secret
+      POSTGRES_DB: user_db
+    volumes:
+      - user-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user_admin -d user_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── PostgreSQL – Note DB ───────────────────────────────────────────────────
+  note-db:
+    image: postgres:16-alpine
+    container_name: note-db
+    restart: unless-stopped
+    networks:
+      - notion-net
+    environment:
+      POSTGRES_USER: note_admin
+      POSTGRES_PASSWORD: note_secret
+      POSTGRES_DB: note_db
+    volumes:
+      - note-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U note_admin -d note_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── User Service ───────────────────────────────────────────────────────────
+  user-service:
+    build:
+      context: ./user-service
+      dockerfile: Dockerfile
+    container_name: user-service
+    restart: unless-stopped
+    networks:
+      - notion-net
+    depends_on:
+      user-db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      PORT: 4001
+      NODE_ENV: production
+      DATABASE_URL: postgresql://user_admin:user_secret@user-db:5432/user_db
+      KAFKA_BROKER: kafka:9092
+    ports:
+      - "4001:4001"
+
+  # ── Note Service ───────────────────────────────────────────────────────────
+  note-service:
+    build:
+      context: ./note-service
+      dockerfile: Dockerfile
+    container_name: note-service
+    restart: unless-stopped
+    networks:
+      - notion-net
+    depends_on:
+      note-db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      PORT: 4002
+      NODE_ENV: production
+      DATABASE_URL: postgresql://note_admin:note_secret@note-db:5432/note_db
+      KAFKA_BROKER: kafka:9092
+    ports:
+      - "4002:4002"
+
+  # ── API Gateway ────────────────────────────────────────────────────────────
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    restart: unless-stopped
+    networks:
+      - notion-net
+    depends_on:
+      - user-service
+      - note-service
+    environment:
+      PORT: 4000
+      NODE_ENV: production
+      USER_SERVICE_URL: http://user-service:4001
+      NOTE_SERVICE_URL: http://note-service:4002
+    ports:
+      - "4000:4000"
+
+  # ── Nginx (reverse proxy / entry point) ───────────────────────────────────
+  nginx:
+    build:
+      context: ../nginx
+      dockerfile: Dockerfile
+    container_name: nginx
+    restart: unless-stopped
+    networks:
+      - notion-net
+    depends_on:
+      - api-gateway
+    ports:
+      - "80:80"

@@ -1,0 +1,31 @@
+# Node
+node_modules/
+dist/
+build/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Env files
+.env
+.env.*
+
+# Docker
+docker-data/
+postgres-data/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Prisma
+prisma/migrations/
+
+# Coverage
+coverage/
