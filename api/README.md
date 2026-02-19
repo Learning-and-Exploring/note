@@ -56,3 +56,24 @@ The system follows the **Database-per-Service** pattern, ensuring each microserv
 ├── transaction-service/    # Business logic & Kafka Consumer
 │   └── prisma/             # Schema for transaction-db
 └── docker-compose.yml      # Full-stack orchestration
+
+
+
+```
+user_db                          note_db
+┌──────────┐                   ┌──────────┐      ┌──────────┐
+│  users   │  ──Kafka event──► │  users   │◄─────│  notes   │
+│          │                   │ (shadow) │      │          │
+│ id       │                   │ id       │      │ id       │
+│ email    │                   │ username │      │ user_id  │
+│ username │                   └──────────┘      │ title    │
+│ password │                                     │ content  │
+│ ...      │                         ┌───────────│ ...      │
+└──────────┘                         │           └──────────┘
+                                     │
+                              ┌──────▼───┐    ┌──────────┐
+                              │note_tags │    │  tags    │
+                              │ note_id  ├────│ id       │
+                              │ tag_id   │    │ name     │
+                              └──────────┘    └──────────┘
+```
