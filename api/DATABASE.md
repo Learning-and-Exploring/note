@@ -45,3 +45,4 @@ CREATE TABLE note_tags (
   PRIMARY KEY (note_id, tag_id)
 );
 ```
+---
