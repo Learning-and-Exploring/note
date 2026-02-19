@@ -78,6 +78,7 @@ user_db                          note_db
                               └──────────┘    └──────────┘
 ```
 ---
+# User Service
 
 ```
 # Users table: stores account credentials and profile info
