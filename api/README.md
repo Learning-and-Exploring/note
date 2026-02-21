@@ -53,7 +53,7 @@ The system follows the **Database-per-Service** pattern, ensuring each microserv
 ├── api-gateway/            # Central entry point (Port 4000)
 ├── user-service/           # User logic & Kafka Producer
 │   └── prisma/             # Schema for user-db
-├── transaction-service/    # Business logic & Kafka Consumer
+├── note-service/    # Business logic & Kafka Consumer
 │   └── prisma/             # Schema for transaction-db
 └── docker-compose.yml      # Full-stack orchestration
 
